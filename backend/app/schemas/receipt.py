@@ -1,0 +1,67 @@
+from datetime import date, datetime
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict
+
+
+class ReceiptBase(BaseModel):
+    merchant: str | None = None
+    amount: Decimal | None = None
+    transaction_date: date | None = None
+    category: str | None = None
+    employee_id: int | None = None
+
+
+class ReceiptCreate(ReceiptBase):
+    """Fields that can be provided when uploading a receipt (besides the file)."""
+    pass
+
+
+class FraudFlagResponse(BaseModel):
+    """Fraud flag as returned in API responses."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    flag_type: str
+    severity: str
+    description: str | None
+    details: dict | None
+    confidence_score: Decimal | None
+    created_at: datetime
+
+
+class ReceiptResponse(BaseModel):
+    """Receipt as returned in API responses."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    employee_id: int | None
+    image_path: str
+    image_hash: str | None
+
+    merchant: str | None
+    amount: Decimal | None
+    transaction_date: date | None
+    category: str | None
+    items: dict | None
+
+    ocr_confidence: Decimal | None
+    ocr_method: str | None
+
+    fraud_score: int | None
+    risk_level: str | None
+    status: str
+
+    created_at: datetime
+    analyzed_at: datetime | None
+    reviewed_at: datetime | None
+
+    fraud_flags: list[FraudFlagResponse] = []
+
+
+class ReceiptListResponse(BaseModel):
+    """Paginated list of receipts."""
+    receipts: list[ReceiptResponse]
+    total: int
+    page: int
+    per_page: int
