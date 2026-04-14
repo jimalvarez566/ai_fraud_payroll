@@ -1,5 +1,7 @@
+import asyncio
 import logging
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
@@ -11,6 +13,7 @@ from app.config import settings
 from app.database import get_db
 from app.models.receipt import Receipt
 from app.schemas.receipt import ReceiptListResponse, ReceiptResponse
+from app.services.ocr import extract_receipt_data
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +64,24 @@ async def upload_receipt(
     )
     db.add(receipt)
     await db.flush()
+
+    # Run Tesseract OCR in a thread pool so it doesn't block the event loop
+    loop = asyncio.get_event_loop()
+    ocr = await loop.run_in_executor(None, extract_receipt_data, str(file_path))
+
+    receipt.merchant = ocr.merchant
+    receipt.amount = ocr.total_amount
+    receipt.transaction_date = ocr.transaction_date
+    receipt.items = {
+        "line_items": ocr.line_items,
+        "transaction_time": ocr.transaction_time,
+        "raw_text": ocr.raw_text,
+    }
+    receipt.ocr_confidence = ocr.confidence
+    receipt.ocr_method = "tesseract"
+    receipt.analyzed_at = datetime.utcnow()
+    receipt.status = "analyzed"
+
     await db.refresh(receipt, attribute_names=["fraud_flags"])
 
     return receipt
