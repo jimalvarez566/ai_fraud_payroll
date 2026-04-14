@@ -38,17 +38,17 @@ An intelligent fraud detection system that analyzes employee expense reports usi
 ## Core Features
 
 ### Phase 1 (Spring 2026 - MVP)
-1. **Receipt Processing**
+1. **Receipt Processing** ✅
    - File upload (PNG, JPG, PDF)
-   - OCR text extraction (Tesseract primary, Gemini Vision fallback)
-   - Structured data parsing (merchant, amount, date, items)
+   - OCR text extraction via Tesseract with image preprocessing pipeline
+   - Structured data parsing (merchant, amount, date, items) with footer zone cutoff
 
-2. **Fraud Detection**
+2. **Fraud Detection** ⬜ in progress
    - Duplicate detection using perceptual hashing
    - Policy validation (configurable rules)
    - Basic risk scoring (0-100 scale)
 
-3. **Simple UI**
+3. **Simple UI** ⬜ not started
    - Upload form
    - Results display with fraud flags
    - Basic fraud explanations

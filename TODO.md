@@ -1,16 +1,6 @@
 # TODO
 
-## Today (Getting Started)
-- [ ] Set up FastAPI project structure
-- [ ] Create database models (Employee, Receipt, FraudFlag)
-- [ ] Set up PostgreSQL locally
-- [ ] Create initial Alembic migration
-- [ ] Build basic receipt upload endpoint
-- [ ] Test file upload with sample receipt image
-
-## This Week (Core MVP)
-- [ ] Implement Tesseract OCR service
-- [ ] Build receipt text parsing (extract merchant, amount, date)
+## Up Next (Core MVP)
 - [ ] Create perceptual hashing for duplicate detection
 - [ ] Implement basic policy validator (2-3 simple rules)
 - [ ] Build fraud scoring logic
@@ -84,3 +74,17 @@
 - [x] Created TODO.md
 - [x] Defined database schema
 - [x] Chose tech stack
+- [x] Set up FastAPI project structure
+- [x] Created database models (Employee, Receipt, FraudFlag, PolicyRule)
+- [x] Set up PostgreSQL locally with `fraud_detection` database
+- [x] Created initial Alembic migration and applied schema
+- [x] Built receipt upload endpoint (POST /api/v1/receipts/upload)
+- [x] Built receipt retrieval endpoints (GET by ID, paginated list)
+- [x] Implement Tesseract OCR service (`app/services/ocr.py`)
+  - [x] Image preprocessing pipeline (grayscale, upscale, autocontrast, sharpen, binarize)
+  - [x] Merchant name detection using Tesseract line-height hierarchy + boilerplate filtering
+  - [x] Transaction date and time extraction
+  - [x] Total amount extraction
+  - [x] Line item parsing with footer zone cutoff
+- [x] Integrated OCR into upload endpoint (runs automatically on every upload)
+- [x] Created `evan-test` branch on GitHub for individual contributions
