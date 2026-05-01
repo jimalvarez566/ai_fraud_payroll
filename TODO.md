@@ -1,17 +1,10 @@
 # TODO
 
-## Up Next (Core MVP)
-- [ ] Create perceptual hashing for duplicate detection
-- [ ] Implement basic policy validator (2-3 simple rules)
-- [ ] Build fraud scoring logic
-- [ ] Create analyze endpoint that combines all detectors
-- [ ] Write unit tests for fraud detectors
-
-## Next 2 Weeks (MVP Polish)
+## Up Next (MVP Polish)
 - [ ] Add proper error handling to API endpoints
 - [ ] Implement caching for analysis results
 - [ ] Create simple React upload form
-- [ ] Build results display page (show fraud flags)
+- [ ] Build results display page (show fraud flags + scores)
 - [ ] Add loading states to frontend
 - [ ] Deploy backend to Render
 - [ ] Deploy frontend to Vercel
@@ -28,8 +21,8 @@
 ## Semester 2 - Phase 2 Features (CPSC 491)
 
 ### Month 1: Advanced Detection
-- [ ] Integrate Gemini Vision API for image analysis
-- [ ] Build AI analyzer service (Claude API integration)
+- [ ] Integrate Gemini Vision API for image analysis (OCR fallback when Tesseract confidence < 70)
+- [ ] Build AI analyzer service (Claude API integration for fraud explanations + categorization)
 - [ ] Implement Isolation Forest anomaly detector
 - [ ] Add expense categorization validation
 - [ ] Enhance risk scoring with weighted signals
@@ -69,22 +62,54 @@
 - [ ] Notion/Linear export integration
 
 ## Done ✅
-- [x] Created PROJECT.md
-- [x] Created IMPLEMENTATION.md
-- [x] Created TODO.md
-- [x] Defined database schema
-- [x] Chose tech stack
+
+### Project Setup
+- [x] Created PROJECT.md, IMPLEMENTATION.md, TODO.md
+- [x] Defined database schema and chose tech stack
 - [x] Set up FastAPI project structure
 - [x] Created database models (Employee, Receipt, FraudFlag, PolicyRule)
 - [x] Set up PostgreSQL locally with `fraud_detection` database
 - [x] Created initial Alembic migration and applied schema
-- [x] Built receipt upload endpoint (POST /api/v1/receipts/upload)
-- [x] Built receipt retrieval endpoints (GET by ID, paginated list)
-- [x] Implement Tesseract OCR service (`app/services/ocr.py`)
-  - [x] Image preprocessing pipeline (grayscale, upscale, autocontrast, sharpen, binarize)
-  - [x] Merchant name detection using Tesseract line-height hierarchy + boilerplate filtering
-  - [x] Transaction date and time extraction
-  - [x] Total amount extraction
-  - [x] Line item parsing with footer zone cutoff
+
+### OCR Service (`app/services/ocr.py`)
+- [x] Image preprocessing pipeline (grayscale, upscale, autocontrast, sharpen, binarize)
+- [x] Merchant name detection using Tesseract line-height hierarchy + boilerplate filtering
+- [x] Transaction date and time extraction (regex, multiple formats)
+- [x] Total amount extraction (keyword-anchored, fallback to largest dollar figure)
+- [x] Line item parsing with footer zone cutoff
 - [x] Integrated OCR into upload endpoint (runs automatically on every upload)
-- [x] Created `evan-test` branch on GitHub for individual contributions
+- [x] OCR and pHash now run in parallel via `asyncio.gather` (saves ~1–2s per upload)
+
+### Fraud Detection Backend
+- [x] Duplicate detection (`app/services/duplicate_detector.py`)
+  - [x] Perceptual hashing (pHash via `imagehash`) stored as `image_hash` on Receipt
+  - [x] Hamming distance comparison against all existing hashes (threshold ≤ 10/64)
+  - [x] Generates `FraudFlag` with `flag_type="duplicate"`, `severity="high"`, `confidence=100%`
+- [x] Policy validator (`app/services/policy_validator.py`) — 5 rule types:
+  - [x] `amount_limit` — flags receipts exceeding a per-category spending cap
+  - [x] `future_date` — flags receipts with transaction dates in the future
+  - [x] `vendor_category` — flags merchants not matching approved expense categories (keyword-based)
+  - [x] `round_number` — flags suspiciously round totals (e.g. $50.00, $25.50) above a threshold
+  - [x] `short_window_duplicate` — flags same employee submitting similar receipts within 48h
+- [x] Policy seed script (`backend/seed_policies.py`) — idempotent, seeds 6 default rules
+- [x] Fraud scorer (`app/services/fraud_scorer.py`)
+  - [x] Weighted score 0–100 combining flag type, severity, and confidence
+  - [x] Diminishing returns for multiple flags (each successive flag contributes half)
+  - [x] Risk levels: low (0–29), medium (30–69), high (70–100)
+- [x] Pipeline orchestrator (`app/services/fraud_detection_pipeline.py`)
+  - [x] Single `run_fraud_pipeline(receipt, db)` function used by both upload and analyze
+  - [x] Extensible: adding Phase 2 detectors requires one new call here
+
+### API Endpoints
+- [x] `POST /api/v1/receipts/upload` — upload, OCR, hash, pipeline, store
+- [x] `GET  /api/v1/receipts/{id}` — fetch receipt with fraud flags
+- [x] `GET  /api/v1/receipts` — paginated list, filterable by status
+- [x] `POST /api/v1/receipts/{id}/analyze` — re-run fraud pipeline, clears old flags first
+- [x] `PATCH /api/v1/receipts/{id}/review` — approve/reject; surfaces `original_receipt_id` for duplicates
+
+### Tests
+- [x] pytest configured (`pytest.ini`, `asyncio_mode=auto`)
+- [x] `tests/test_services/test_fraud_scorer.py` — 17 tests, full scorer coverage
+- [x] `tests/test_services/test_policy_validator.py` — 30 tests, all 4 sync rule types
+- [x] `tests/test_services/test_duplicate_detector.py` — 6 tests, hash computation
+- [x] 53 tests, all passing

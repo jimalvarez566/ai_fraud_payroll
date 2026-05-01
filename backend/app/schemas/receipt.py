@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -65,3 +66,19 @@ class ReceiptListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+class ReviewRequest(BaseModel):
+    """Body for the review endpoint."""
+    decision: Literal["approved", "rejected"]
+    note: str | None = None
+
+
+class ReviewResponse(ReceiptResponse):
+    """Review response — same as ReceiptResponse plus duplicate chain context.
+
+    original_receipt_id is set when the reviewed receipt has duplicate flags,
+    identifying the earliest submission with the same image hash. Helps
+    reviewers distinguish the original from a re-submission.
+    """
+    original_receipt_id: int | None = None

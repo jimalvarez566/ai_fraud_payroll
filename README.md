@@ -5,45 +5,71 @@ Senior capstone project (CPSC 490/491) — an intelligent system that analyzes e
 ## Stack
 
 - **Backend:** FastAPI (Python 3.11+), SQLAlchemy async, PostgreSQL
-- **AI/ML (planned):** Tesseract OCR, Claude API, Gemini Vision, scikit-learn
+- **AI/ML:** Tesseract OCR, imagehash (pHash), scikit-learn (Phase 2), Claude API (Phase 2), Gemini Vision (Phase 2)
 - **Frontend (planned):** React 18, TypeScript, Tailwind CSS
 
 ## What's Built
 
-### Backend foundation (`backend/`)
-- FastAPI project structure with async/await throughout
-- PostgreSQL database with 4 core tables: `employees`, `receipts`, `fraud_flags`, `policy_rules`
-- Alembic migrations for schema management
-- Pydantic v2 schemas for request/response validation
-- Environment-based configuration with feature flags
+### Backend — Fully Functional Fraud Detection Pipeline
 
-### Tesseract OCR Service (`backend/app/services/ocr.py`)
-Automatically runs on every receipt upload and extracts:
-- **Merchant name** — detected by finding the largest-font line using Tesseract's internal line hierarchy (`image_to_data` level-4 bounding boxes), with boilerplate filtering (URLs, "thank you", payment info) and a receipt zone limit (top 60% of image)
-- **Transaction date and time** — regex patterns covering MM/DD/YYYY, YYYY-MM-DD, and month-name formats
-- **Total amount** — keyword-anchored search (`total`, `amount due`, `grand total`), falling back to the largest dollar amount on the page
-- **Line items** — regex per line, stops at the first footer keyword (`subtotal`, `tax`, `total`) so payment and card info are never included; handles trailing taxability indicators (e.g. Walmart's `X`)
+Every receipt upload automatically runs the full pipeline:
 
-Image preprocessing pipeline applied before all OCR calls:
-1. Grayscale conversion
-2. Upscale to minimum 1000px width (improves Tesseract accuracy on phone photos)
-3. Auto-contrast histogram stretch
-4. Sharpening (2×)
-5. Binarization (pure black/white threshold)
+```
+Upload → OCR + pHash (parallel) → Duplicate Detection → Policy Validation → Fraud Scoring → Response
+```
+
+### OCR Service (`app/services/ocr.py`)
+Extracts structured data from receipt images using Tesseract with a preprocessing pipeline:
+
+| Field | Method |
+|---|---|
+| Merchant name | Largest-font line via Tesseract level-4 bounding boxes, boilerplate-filtered, top-60% zone |
+| Transaction date | Regex across MM/DD/YYYY, YYYY-MM-DD, and month-name formats |
+| Total amount | Keyword-anchored search (`total`, `amount due`), falls back to largest dollar figure |
+| Line items | Per-line regex, stops at first footer keyword (subtotal/tax/total) |
+
+Preprocessing: grayscale → upscale (min 1000px) → autocontrast → sharpen → binarize.
+
+### Fraud Detection Services
+
+**Duplicate Detector** (`app/services/duplicate_detector.py`)
+- Computes a perceptual hash (pHash) of each uploaded image
+- Compares against all existing hashes using Hamming distance (threshold ≤ 10/64 bits)
+- Flags near-identical images even when re-photographed at different angles or brightness
+
+**Policy Validator** (`app/services/policy_validator.py`)
+- Evaluates all active `policy_rules` from the database
+- Five rule types: `amount_limit`, `future_date`, `vendor_category`, `round_number`, `short_window_duplicate`
+- Seed default rules with `python seed_policies.py`
+
+**Fraud Scorer** (`app/services/fraud_scorer.py`)
+- Combines all flags into a 0–100 risk score
+- Weights by flag type and severity; diminishing returns for multiple flags
+- Risk levels: `low` (0–29), `medium` (30–69), `high` (70–100)
+
+**Pipeline Orchestrator** (`app/services/fraud_detection_pipeline.py`)
+- Single `run_fraud_pipeline(receipt, db)` used by both upload and analyze endpoints
+- Adding Phase 2 detectors requires one new call here
 
 ### API Endpoints (`/api/v1/`)
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/health` | Health check |
-| `POST` | `/api/v1/receipts/upload` | Upload receipt → auto-runs OCR → stores extracted data |
-| `GET` | `/api/v1/receipts/{id}` | Get a receipt with fraud flags and OCR results |
-| `GET` | `/api/v1/receipts` | List receipts (paginated, filterable by status) |
+| `GET`   | `/health` | Health check |
+| `POST`  | `/api/v1/receipts/upload` | Upload receipt → OCR + pHash (parallel) → fraud pipeline → store |
+| `POST`  | `/api/v1/receipts/{id}/analyze` | Re-run fraud pipeline on existing receipt (clears old flags) |
+| `PATCH` | `/api/v1/receipts/{id}/review` | Approve or reject a receipt; returns `original_receipt_id` for duplicates |
+| `GET`   | `/api/v1/receipts/{id}` | Fetch receipt with fraud flags and OCR data |
+| `GET`   | `/api/v1/receipts` | List receipts (paginated, filterable by status) |
 
-Interactive docs available at `http://localhost:8000/docs` when running locally.
+Interactive docs: `http://localhost:8000/docs`
+
+### Tests
+53 unit tests covering fraud scorer, all policy rule types, and hash computation — run with `pytest`.
 
 ## Local Setup
 
-**Prerequisites:** Python 3.11+, PostgreSQL 15
+**Prerequisites:** Python 3.11+, PostgreSQL 15, Tesseract OCR
 
 ```bash
 # 1. Create database
@@ -62,17 +88,28 @@ cp .env.example .env
 # 4. Run migrations
 alembic upgrade head
 
-# 5. Start server
+# 5. Seed default policy rules
+python seed_policies.py
+
+# 6. Start server
 uvicorn app.main:app --reload
 ```
 
 ## What's Next
 
-- [ ] Duplicate detection — perceptual hashing (pHash)
-- [ ] Policy validator — configurable rule checks
-- [ ] Fraud scorer — combine signals into a 0–100 risk score
+### MVP Polish (before CPSC 490 submission)
 - [ ] React frontend — upload form and results display
-- [ ] Unit + integration tests
+- [ ] Deploy backend to Render, frontend to Vercel
+- [ ] End-to-end test with 20 sample receipts
+- [ ] `API.md` endpoint documentation
+- [ ] Accuracy metrics on test dataset
+
+### Phase 2 (CPSC 491)
+- Gemini Vision fallback for low-confidence OCR
+- Claude API for fraud explanations and expense categorization
+- Isolation Forest anomaly detection
+- Analytics dashboard (employee risk clustering, fraud trends)
+- User authentication and review workflow UI
 
 ## Project Docs
 

@@ -5,14 +5,17 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.database import get_db
+from app.models.fraud_flag import FraudFlag
 from app.models.receipt import Receipt
-from app.schemas.receipt import ReceiptListResponse, ReceiptResponse
+from app.schemas.receipt import ReceiptListResponse, ReceiptResponse, ReviewRequest, ReviewResponse
+from app.services.duplicate_detector import compute_image_hash
+from app.services.fraud_detection_pipeline import run_fraud_pipeline
 from app.services.ocr import extract_receipt_data
 
 logger = logging.getLogger(__name__)
@@ -32,6 +35,7 @@ async def upload_receipt(
 
     Accepts PNG, JPG, or PDF files up to the configured size limit.
     The file is saved to the uploads directory with a unique filename.
+    OCR runs automatically, followed by the full fraud detection pipeline.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No filename provided")
@@ -50,11 +54,9 @@ async def upload_receipt(
             detail=f"File exceeds maximum size of {settings.MAX_FILE_SIZE_MB}MB",
         )
 
-    # Save file with unique name to prevent collisions
     unique_name = f"{uuid.uuid4().hex}{ext}"
     file_path = settings.upload_path / unique_name
     file_path.write_bytes(contents)
-
     logger.info("Saved receipt image: %s (%d bytes)", unique_name, len(contents))
 
     receipt = Receipt(
@@ -65,9 +67,12 @@ async def upload_receipt(
     db.add(receipt)
     await db.flush()
 
-    # Run Tesseract OCR in a thread pool so it doesn't block the event loop
+    # OCR and hash run in a thread pool so they don't block the event loop
     loop = asyncio.get_event_loop()
-    ocr = await loop.run_in_executor(None, extract_receipt_data, str(file_path))
+    ocr, image_hash = await asyncio.gather(
+        loop.run_in_executor(None, extract_receipt_data, str(file_path)),
+        loop.run_in_executor(None, compute_image_hash, str(file_path)),
+    )
 
     receipt.merchant = ocr.merchant
     receipt.amount = ocr.total_amount
@@ -80,11 +85,110 @@ async def upload_receipt(
     receipt.ocr_confidence = ocr.confidence
     receipt.ocr_method = "tesseract"
     receipt.analyzed_at = datetime.utcnow()
-    receipt.status = "analyzed"
+    receipt.image_hash = image_hash  # may be None if hashing failed
+
+    await run_fraud_pipeline(receipt, db)
 
     await db.refresh(receipt, attribute_names=["fraud_flags"])
-
     return receipt
+
+
+@router.post("/{receipt_id}/analyze", response_model=ReceiptResponse)
+async def analyze_receipt(
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> Receipt:
+    """Run the full fraud detection pipeline on an existing receipt.
+
+    Safe to call multiple times — existing fraud flags are cleared before
+    each run so results always reflect the current policy rules.
+
+    Returns 400 if the receipt has not been OCR-processed yet (status=pending).
+    """
+    result = await db.execute(
+        select(Receipt)
+        .options(selectinload(Receipt.fraud_flags))
+        .where(Receipt.id == receipt_id)
+    )
+    receipt = result.scalar_one_or_none()
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if receipt.status == "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Receipt has not been OCR-processed yet; upload again or wait.",
+        )
+
+    # Clear flags from any previous run so results stay fresh
+    await db.execute(delete(FraudFlag).where(FraudFlag.receipt_id == receipt_id))
+
+    receipt.analyzed_at = datetime.utcnow()
+    await run_fraud_pipeline(receipt, db)
+
+    await db.refresh(receipt, attribute_names=["fraud_flags"])
+    return receipt
+
+
+@router.patch("/{receipt_id}/review", response_model=ReviewResponse)
+async def review_receipt(
+    receipt_id: int,
+    body: ReviewRequest,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Approve or reject a receipt after human review.
+
+    Sets status to 'approved' or 'rejected' and records the review timestamp.
+    When the receipt has duplicate flags the response includes
+    original_receipt_id — the earliest submission with the same image hash —
+    so reviewers can distinguish the original from a re-submission.
+
+    Note: the optional review note is logged but not yet persisted
+    (requires a schema migration to add a review_note column).
+    """
+    result = await db.execute(
+        select(Receipt)
+        .options(selectinload(Receipt.fraud_flags))
+        .where(Receipt.id == receipt_id)
+    )
+    receipt = result.scalar_one_or_none()
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    if receipt.status == "pending":
+        raise HTTPException(
+            status_code=400,
+            detail="Receipt has not been processed yet and cannot be reviewed.",
+        )
+
+    receipt.status = body.decision
+    receipt.reviewed_at = datetime.utcnow()
+
+    if body.note:
+        logger.info("Review note for receipt %d: %s", receipt_id, body.note)
+
+    # Find the earliest receipt with the same hash when duplicate flags exist,
+    # so reviewers know whether they are looking at the original or a copy.
+    original_receipt_id: int | None = None
+    has_duplicate_flag = any(f.flag_type == "duplicate" for f in receipt.fraud_flags)
+    if has_duplicate_flag and receipt.image_hash:
+        earliest = await db.execute(
+            select(Receipt.id)
+            .where(Receipt.image_hash == receipt.image_hash)
+            .where(Receipt.id != receipt_id)
+            .order_by(Receipt.created_at.asc())
+            .limit(1)
+        )
+        original_receipt_id = earliest.scalar_one_or_none()
+
+    await db.flush()
+
+    logger.info(
+        "Receipt %d %s by reviewer (original_receipt_id=%s)",
+        receipt_id, body.decision, original_receipt_id,
+    )
+
+    response_data = ReceiptResponse.model_validate(receipt).model_dump()
+    response_data["original_receipt_id"] = original_receipt_id
+    return response_data
 
 
 @router.get("/{receipt_id}", response_model=ReceiptResponse)
@@ -119,10 +223,8 @@ async def list_receipts(
         query = query.where(Receipt.status == status)
         count_query = count_query.where(Receipt.status == status)
 
-    # Get total count
     total = (await db.execute(count_query)).scalar_one()
 
-    # Get paginated results
     offset = (page - 1) * per_page
     query = query.order_by(Receipt.created_at.desc()).offset(offset).limit(per_page)
     result = await db.execute(query)
