@@ -52,10 +52,11 @@ An intelligent fraud detection system that analyzes employee expense reports usi
    - Review endpoint with `original_receipt_id` context for duplicate chains
    - 53 unit tests, all passing
 
-3. **Simple UI** ⬜ not started
-   - Upload form
-   - Results display with fraud flags and risk score
-   - Basic fraud explanations
+3. **Simple UI** ✅
+   - Upload page — drag-and-drop, loading state, redirect on success
+   - Receipts list — paginated table with status filter
+   - Receipt detail — fraud score, OCR fields, fraud flags, approve/reject/re-analyze
+   - Dashboard — volume and risk breakdown summary cards
 
 ### Phase 2 (Fall 2026 - Production)
 1. **Advanced Detection**

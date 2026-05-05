@@ -1,20 +1,8 @@
 # TODO
 
 ## Up Next (MVP Polish)
-## Frontend (CPSC 490 Prototype)
-- [ ] Initialize Vite + React 18 + TypeScript + Tailwind + shadcn/ui
-- [ ] Sidebar layout and routing
-- [ ] Dashboard page — summary cards
-- [ ] Receipts list page — table, pagination, status filter
-- [ ] Receipt detail page — OCR fields, fraud flags, approve/reject
-- [ ] Upload page — drop zone, loading state, redirect on success
-- [ ] Connect all pages to live backend endpoints
 
-- [ ] Add proper error handling to API endpoints
-- [ ] Implement caching for analysis results
-- [ ] Create simple React upload form
-- [ ] Build results display page (show fraud flags + scores)
-- [ ] Add loading states to frontend
+### Deployment
 - [ ] Deploy backend to Render
 - [ ] Deploy frontend to Vercel
 - [ ] Test end-to-end with 20 sample receipts
@@ -122,3 +110,14 @@
 - [x] `tests/test_services/test_policy_validator.py` — 30 tests, all 4 sync rule types
 - [x] `tests/test_services/test_duplicate_detector.py` — 6 tests, hash computation
 - [x] 53 tests, all passing
+
+### Frontend (`frontend/`)
+- [x] Vite + React 18 + TypeScript + Tailwind CSS v4 + shadcn/ui initialized
+- [x] Dark fintech theme (#0a0a0a background, monospace numbers, risk color coding)
+- [x] Sidebar layout with React Router — Dashboard / Receipts / Upload
+- [x] ErrorBoundary wrapping all pages
+- [x] Typed API client (`src/lib/api.ts`) covering all 5 backend endpoints
+- [x] Dashboard page — volume cards + risk breakdown, all clickable
+- [x] Receipts list page — table, status filter, pagination, live data
+- [x] Receipt detail page — fraud score, OCR fields, line items, fraud flags, approve/reject/re-analyze
+- [x] Upload page — drag-and-drop zone, loading state, redirect on success

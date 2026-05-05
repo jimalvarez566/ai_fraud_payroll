@@ -6,7 +6,7 @@ Senior capstone project (CPSC 490/491) — an intelligent system that analyzes e
 
 - **Backend:** FastAPI (Python 3.11+), SQLAlchemy async, PostgreSQL
 - **AI/ML:** Tesseract OCR, imagehash (pHash), scikit-learn (Phase 2), Claude API (Phase 2), Gemini Vision (Phase 2)
-- **Frontend (planned):** React 18, TypeScript, Tailwind CSS
+- **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Router
 
 ## What's Built
 
@@ -51,9 +51,16 @@ Preprocessing: grayscale → upscale (min 1000px) → autocontrast → sharpen �
 - Single `run_fraud_pipeline(receipt, db)` used by both upload and analyze endpoints
 - Adding Phase 2 detectors requires one new call here
 
-### Frontend (in progress)
-Basic prototype UI — see `FRONTEND.md` for design direction and page specs.
-Not yet deployed. Run locally with `npm run dev` from the `frontend/` directory.
+### Frontend — Prototype UI ✅
+
+Dark fintech SaaS interface (Stripe/Linear aesthetic). Run locally with `npm run dev` from `frontend/`.
+
+| Page | Route | Description |
+|---|---|---|
+| Dashboard | `/` | Summary cards — total, pending, approved, rejected, risk breakdown |
+| Receipts List | `/receipts` | Paginated table with status filter; click any row to open detail |
+| Receipt Detail | `/receipts/:id` | Fraud score, OCR fields, line items, fraud flags, approve/reject/re-analyze |
+| Upload | `/upload` | Drag-and-drop zone; redirects to detail page on success |
 
 ### API Endpoints (`/api/v1/`)
 
@@ -73,7 +80,9 @@ Interactive docs: `http://localhost:8000/docs`
 
 ## Local Setup
 
-**Prerequisites:** Python 3.11+, PostgreSQL 15, Tesseract OCR
+**Prerequisites:** Python 3.11+, PostgreSQL 15, Tesseract OCR, Node.js 18+
+
+### Backend
 
 ```bash
 # 1. Create database
@@ -99,10 +108,18 @@ python seed_policies.py
 uvicorn app.main:app --reload
 ```
 
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+# Opens at http://localhost:5173
+```
+
 ## What's Next
 
 ### MVP Polish (before CPSC 490 submission)
-- [ ] React frontend — upload form and results display
 - [ ] Deploy backend to Render, frontend to Vercel
 - [ ] End-to-end test with 20 sample receipts
 - [ ] `API.md` endpoint documentation
@@ -119,4 +136,5 @@ uvicorn app.main:app --reload
 
 - [`PROJECT.md`](PROJECT.md) — goals, tech stack, success metrics
 - [`IMPLEMENTATION.md`](IMPLEMENTATION.md) — architecture and technical decisions
+- [`FRONTEND.md`](FRONTEND.md) — frontend design direction and page specs
 - [`TODO.md`](TODO.md) — full task breakdown by semester
