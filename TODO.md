@@ -1,6 +1,15 @@
 # TODO
 
 ## Up Next (MVP Polish)
+## Frontend (CPSC 490 Prototype)
+- [ ] Initialize Vite + React 18 + TypeScript + Tailwind + shadcn/ui
+- [ ] Sidebar layout and routing
+- [ ] Dashboard page — summary cards
+- [ ] Receipts list page — table, pagination, status filter
+- [ ] Receipt detail page — OCR fields, fraud flags, approve/reject
+- [ ] Upload page — drop zone, loading state, redirect on success
+- [ ] Connect all pages to live backend endpoints
+
 - [ ] Add proper error handling to API endpoints
 - [ ] Implement caching for analysis results
 - [ ] Create simple React upload form

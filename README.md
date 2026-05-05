@@ -51,6 +51,10 @@ Preprocessing: grayscale → upscale (min 1000px) → autocontrast → sharpen �
 - Single `run_fraud_pipeline(receipt, db)` used by both upload and analyze endpoints
 - Adding Phase 2 detectors requires one new call here
 
+### Frontend (in progress)
+Basic prototype UI — see `FRONTEND.md` for design direction and page specs.
+Not yet deployed. Run locally with `npm run dev` from the `frontend/` directory.
+
 ### API Endpoints (`/api/v1/`)
 
 | Method | Endpoint | Description |

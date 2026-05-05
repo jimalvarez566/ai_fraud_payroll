@@ -53,6 +53,20 @@ backend/
 ├── .env / .env.example
 └── alembic/                   # Migrations (initial schema applied ✅)
 ```
+### Frontend Architecture
+See `FRONTEND.md` for full frontend implementation details, design decisions, and page specs.
+
+Frontend stack: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Router.
+Connects to backend via `VITE_API_URL` environment variable.
+
+Directory structure:
+frontend/
+├── src/
+│   ├── pages/         # Dashboard, ReceiptsList, ReceiptDetail, Upload
+│   ├── components/    # Shared UI components
+│   └── main.tsx
+├── .env
+└── vite.config.ts
 
 ## Database Schema
 
