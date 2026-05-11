@@ -52,6 +52,7 @@ class ReceiptResponse(BaseModel):
     fraud_score: int | None
     risk_level: str | None
     status: str
+    explanation: str | None
 
     created_at: datetime
     analyzed_at: datetime | None

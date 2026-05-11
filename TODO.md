@@ -8,7 +8,7 @@
 - [ ] Test end-to-end with 20 sample receipts
 
 ## Semester 1 Completion (CPSC 490)
-- [ ] Document API endpoints in API.md
+- [x] Document API endpoints in API.md
 - [ ] Create test dataset (100 legitimate, 50 fraudulent receipts)
 - [ ] Measure and document accuracy metrics
 - [ ] Write final report for CPSC 490

@@ -5,7 +5,7 @@ Senior capstone project (CPSC 490/491) — an intelligent system that analyzes e
 ## Stack
 
 - **Backend:** FastAPI (Python 3.11+), SQLAlchemy async, PostgreSQL
-- **AI/ML:** Tesseract OCR, imagehash (pHash), scikit-learn (Phase 2), Claude API (Phase 2), Gemini Vision (Phase 2)
+- **AI/ML:** Tesseract OCR, imagehash (pHash), Gemini 2.5 Flash, scikit-learn (Phase 2)
 - **Frontend:** React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Router
 
 ## What's Built
@@ -59,7 +59,7 @@ Dark fintech SaaS interface (Stripe/Linear aesthetic). Run locally with `npm run
 |---|---|---|
 | Dashboard | `/` | Summary cards — total, pending, approved, rejected, risk breakdown |
 | Receipts List | `/receipts` | Paginated table with status filter; click any row to open detail |
-| Receipt Detail | `/receipts/:id` | Fraud score, OCR fields, line items, fraud flags, approve/reject/re-analyze |
+| Receipt Detail | `/receipts/:id` | Fraud score, OCR fields, line items, fraud flags, approve/reject/re-analyze, "Why this score?" AI explanation |
 | Upload | `/upload` | Drag-and-drop zone; redirects to detail page on success |
 
 ### API Endpoints (`/api/v1/`)
@@ -68,7 +68,8 @@ Dark fintech SaaS interface (Stripe/Linear aesthetic). Run locally with `npm run
 |--------|----------|-------------|
 | `GET`   | `/health` | Health check |
 | `POST`  | `/api/v1/receipts/upload` | Upload receipt → OCR + pHash (parallel) → fraud pipeline → store |
-| `POST`  | `/api/v1/receipts/{id}/analyze` | Re-run fraud pipeline on existing receipt (clears old flags) |
+| `POST`  | `/api/v1/receipts/{id}/analyze` | Re-run fraud pipeline on existing receipt (clears old flags and cached explanation) |
+| `POST`  | `/api/v1/receipts/{id}/explain` | Generate AI explanation via Gemini 2.5 Flash; cached after first call. See `GEMINI_EXPLAINER.md`. |
 | `PATCH` | `/api/v1/receipts/{id}/review` | Approve or reject a receipt; returns `original_receipt_id` for duplicates |
 | `GET`   | `/api/v1/receipts/{id}` | Fetch receipt with fraud flags and OCR data |
 | `GET`   | `/api/v1/receipts` | List receipts (paginated, filterable by status) |
@@ -122,12 +123,10 @@ npm run dev
 ### MVP Polish (before CPSC 490 submission)
 - [ ] Deploy backend to Render, frontend to Vercel
 - [ ] End-to-end test with 20 sample receipts
-- [ ] `API.md` endpoint documentation
 - [ ] Accuracy metrics on test dataset
 
 ### Phase 2 (CPSC 491)
 - Gemini Vision fallback for low-confidence OCR
-- Claude API for fraud explanations and expense categorization
 - Isolation Forest anomaly detection
 - Analytics dashboard (employee risk clustering, fraud trends)
 - User authentication and review workflow UI
@@ -137,4 +136,6 @@ npm run dev
 - [`PROJECT.md`](PROJECT.md) — goals, tech stack, success metrics
 - [`IMPLEMENTATION.md`](IMPLEMENTATION.md) — architecture and technical decisions
 - [`FRONTEND.md`](FRONTEND.md) — frontend design direction and page specs
+- [`GEMINI_EXPLAINER.md`](GEMINI_EXPLAINER.md) — spec for the "Why this score?" AI explanation feature
+- [`API.md`](API.md) — full API reference
 - [`TODO.md`](TODO.md) — full task breakdown by semester

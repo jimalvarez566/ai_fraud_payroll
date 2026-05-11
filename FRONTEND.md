@@ -49,6 +49,13 @@ Rules:
 - Approve / Reject buttons calling `PATCH /api/v1/receipts/:id/review`
 - Re-analyze button calling `POST /api/v1/receipts/:id/analyze`
 
+### "Why this score?" Button (Explain Feature)
+- Only render if receipt has at least one fraud flag
+- See GEMINI_EXPLAINER.md for full behavior spec
+- Button sits below the fraud flags section
+- Styled as a subtle bordered callout, no special colors
+- Toggle visibility after first load, do not re-fetch
+
 ### Upload `/upload`
 - Clean file drop zone
 - Accepted formats: PNG, JPG, PDF

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import logo from '@/assets/logo.png'
 
 const links = [
   { to: '/', label: 'Dashboard', exact: true },
@@ -12,8 +13,10 @@ export function Layout() {
     <div className="flex h-screen bg-[#0a0a0a] text-[#e5e5e5]">
       {/* Sidebar */}
       <aside className="w-52 shrink-0 border-r border-[#262626] flex flex-col">
-        <div className="px-4 py-5 border-b border-[#262626]">
-          <span className="text-sm font-semibold tracking-tight text-white">FraudDetect</span>
+        <div className="px-4 py-4 border-b border-[#262626] flex items-center">
+          <NavLink to="/">
+            <img src={logo} alt="Receiptly" className="h-20 w-auto mix-blend-screen" />
+          </NavLink>
         </div>
         <nav className="flex flex-col gap-0.5 p-2 flex-1">
           {links.map(({ to, label, exact }) => (
@@ -22,7 +25,7 @@ export function Layout() {
               to={to}
               end={exact}
               className={({ isActive }) =>
-                `px-3 py-2 rounded text-sm transition-colors ${
+                `px-3 py-2.5 rounded text-base transition-colors ${
                   isActive
                     ? 'bg-[#1a1a1a] text-white'
                     : 'text-[#737373] hover:text-[#e5e5e5] hover:bg-[#111111]'

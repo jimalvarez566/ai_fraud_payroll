@@ -22,6 +22,7 @@ export interface Receipt {
   fraud_score: number | null
   risk_level: 'low' | 'medium' | 'high' | null
   status: 'pending' | 'flagged' | 'approved' | 'rejected' | 'analyzed'
+  explanation: string | null
   image_path: string
   image_hash: string | null
   created_at: string
@@ -90,4 +91,7 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ decision, note }),
     }),
+
+  explainReceipt: (id: number): Promise<{ explanation: string }> =>
+    request(`/api/v1/receipts/${id}/explain`, { method: 'POST' }),
 }

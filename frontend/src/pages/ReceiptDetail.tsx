@@ -28,6 +28,12 @@ export function ReceiptDetail() {
   const [actionState, setActionState] = useState<ActionState>('idle')
   const [actionError, setActionError] = useState<string | null>(null)
 
+  const [explanation, setExplanation] = useState<string | null>(null)
+  const [explainVisible, setExplainVisible] = useState(false)
+  const [explainLoading, setExplainLoading] = useState(false)
+  const [explainError, setExplainError] = useState<string | null>(null)
+  const [explanationInitialized, setExplanationInitialized] = useState(false)
+
   useEffect(() => {
     if (!id) return
     setLoading(true)
@@ -38,6 +44,17 @@ export function ReceiptDetail() {
       .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load'))
       .finally(() => setLoading(false))
   }, [id])
+
+  // Pre-populate explanation from initial GET response (once per receipt load)
+  useEffect(() => {
+    if (receipt && !explanationInitialized) {
+      setExplanationInitialized(true)
+      if (receipt.explanation) {
+        setExplanation(receipt.explanation)
+        setExplainVisible(true)
+      }
+    }
+  }, [receipt, explanationInitialized])
 
   const runAction = async (fn: () => Promise<Receipt>) => {
     setActionState('loading')
@@ -54,7 +71,31 @@ export function ReceiptDetail() {
 
   const approve = () => runAction(() => api.reviewReceipt(Number(id), 'approved'))
   const reject = () => runAction(() => api.reviewReceipt(Number(id), 'rejected'))
-  const reanalyze = () => runAction(() => api.analyzeReceipt(Number(id)))
+  const reanalyze = () => {
+    setExplanation(null)
+    setExplainVisible(false)
+    setExplainError(null)
+    setExplanationInitialized(false)
+    runAction(() => api.analyzeReceipt(Number(id)))
+  }
+
+  const handleExplain = async () => {
+    if (explanation !== null) {
+      setExplainVisible((v) => !v)
+      return
+    }
+    setExplainLoading(true)
+    setExplainError(null)
+    try {
+      const result = await api.explainReceipt(Number(id))
+      setExplanation(result.explanation)
+      setExplainVisible(true)
+    } catch (err) {
+      setExplainError(err instanceof Error ? err.message : 'Failed to get explanation')
+    } finally {
+      setExplainLoading(false)
+    }
+  }
 
   if (loading) {
     return <div className="p-8 text-sm text-[#737373]">Loading…</div>
@@ -190,6 +231,37 @@ export function ReceiptDetail() {
           </div>
         )}
       </section>
+
+      {/* Explain feature */}
+      {receipt.fraud_flags.length > 0 && (
+        <div className="mb-4">
+          <button
+            onClick={handleExplain}
+            disabled={explainLoading}
+            className="text-xs px-3 py-1.5 rounded border border-[#262626] text-[#737373] hover:text-white hover:border-[#404040] transition-colors disabled:opacity-40 flex items-center gap-2"
+          >
+            {explainLoading && (
+              <span className="inline-block w-3 h-3 border border-[#737373] border-t-white rounded-full animate-spin" />
+            )}
+            {explainLoading
+              ? 'Fetching explanation…'
+              : explanation !== null && explainVisible
+              ? 'Hide explanation'
+              : 'Why this score?'}
+          </button>
+
+          {explainError && (
+            <p className="mt-2 text-xs text-red-400">{explainError}</p>
+          )}
+
+          {explanation !== null && explainVisible && (
+            <div className="mt-3 border border-[#262626] rounded px-4 py-3">
+              <p className="text-xs font-medium text-[#737373] uppercase tracking-wider mb-2">AI Explanation</p>
+              <p className="text-sm text-[#e5e5e5] leading-relaxed">{explanation}</p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex items-center gap-2">

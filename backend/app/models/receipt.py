@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Optional
 
 from sqlalchemy import ForeignKey, Index, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
@@ -33,6 +34,9 @@ class Receipt(Base):
     fraud_score: Mapped[int | None]
     risk_level: Mapped[str | None] = mapped_column(String(20))
     status: Mapped[str] = mapped_column(String(50), default="pending")
+
+    # AI explanation (cached Gemini output)
+    explanation: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)

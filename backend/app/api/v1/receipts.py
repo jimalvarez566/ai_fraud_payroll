@@ -4,7 +4,9 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -16,7 +18,10 @@ from app.models.receipt import Receipt
 from app.schemas.receipt import ReceiptListResponse, ReceiptResponse, ReviewRequest, ReviewResponse
 from app.services.duplicate_detector import compute_image_hash
 from app.services.fraud_detection_pipeline import run_fraud_pipeline
+from app.services.gemini_explainer import call_gemini
 from app.services.ocr import extract_receipt_data
+
+limiter = Limiter(key_func=get_remote_address)
 
 logger = logging.getLogger(__name__)
 
@@ -119,14 +124,60 @@ async def analyze_receipt(
             detail="Receipt has not been OCR-processed yet; upload again or wait.",
         )
 
-    # Clear flags from any previous run so results stay fresh
+    # Clear flags and cached explanation from any previous run
     await db.execute(delete(FraudFlag).where(FraudFlag.receipt_id == receipt_id))
+    receipt.explanation = None
 
     receipt.analyzed_at = datetime.utcnow()
     await run_fraud_pipeline(receipt, db)
 
     await db.refresh(receipt, attribute_names=["fraud_flags"])
     return receipt
+
+
+@router.post("/{receipt_id}/explain")
+@limiter.limit("5/day")
+async def explain_receipt(
+    request: Request,
+    receipt_id: int,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return a plain-English explanation of the fraud risk score via Gemini 2.5 Flash.
+
+    The result is cached on the receipt record. Subsequent calls return the cached
+    value without calling Gemini again. Cleared when the receipt is re-analyzed.
+    Rate limited to 5 requests per day per IP.
+    """
+    result = await db.execute(
+        select(Receipt)
+        .options(selectinload(Receipt.fraud_flags))
+        .where(Receipt.id == receipt_id)
+    )
+    receipt = result.scalar_one_or_none()
+    if not receipt:
+        raise HTTPException(status_code=404, detail="Receipt not found")
+
+    if not receipt.fraud_flags:
+        raise HTTPException(status_code=400, detail="Receipt has no fraud flags — nothing to explain")
+
+    if receipt.explanation:
+        return {"explanation": receipt.explanation}
+
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY is not configured")
+
+    try:
+        explanation = await asyncio.get_event_loop().run_in_executor(
+            None, call_gemini, receipt, receipt.fraud_flags
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+    receipt.explanation = explanation
+    await db.flush()
+
+    logger.info("Cached Gemini explanation for receipt %d", receipt_id)
+    return {"explanation": explanation}
 
 
 @router.patch("/{receipt_id}/review", response_model=ReviewResponse)
