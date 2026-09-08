@@ -88,6 +88,25 @@ async def test_add_member_unknown_email_is_404(client, db_session, user_a_id, mo
     assert resp.status_code == 404
 
 
+async def test_add_member_idempotent_returns_200(client, db_session, user_a_id, monkeypatch):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+    existing = uuid.uuid4()
+    db_session.add(Membership(tenant_id=tenant.id, user_id=existing, role="member"))
+    await db_session.commit()
+
+    async def fake_lookup(email):
+        return existing
+
+    monkeypatch.setattr(supabase_client, "lookup_user_id_by_email", fake_lookup)
+    token = make_token(user_a_id)
+    resp = await client.post(
+        f"/api/v1/tenants/{tenant.id}/members",
+        json={"email": "existing@x.com"},
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 200
+
+
 async def test_remove_member_success(client, db_session, user_a_id, monkeypatch):
     tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
     victim = uuid.uuid4()

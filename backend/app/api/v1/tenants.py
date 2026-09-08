@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +71,7 @@ async def list_members(
 async def add_member(
     tenant_id: int,
     body: MemberAddRequest,
+    response: Response,
     context: RequestContext = Depends(get_current_context),
     db: AsyncSession = Depends(get_db),
 ) -> Membership:
@@ -90,6 +91,7 @@ async def add_member(
         )
     ).scalar_one_or_none()
     if existing is not None:
+        response.status_code = status.HTTP_200_OK
         return existing
     membership = Membership(tenant_id=tenant_id, user_id=user_id, role="member")
     db.add(membership)
