@@ -1,0 +1,98 @@
+import uuid
+
+import pytest
+
+from app import supabase_client
+from app.models import Membership, Tenant
+from tests.conftest import make_token
+
+
+async def _seed_tenant(db_session, owner_id: uuid.UUID, name="Acme"):
+    tenant = Tenant(name=name, created_by_user_id=owner_id)
+    db_session.add(tenant)
+    await db_session.flush()
+    db_session.add(Membership(tenant_id=tenant.id, user_id=owner_id, role="owner"))
+    await db_session.commit()
+    return tenant
+
+
+async def test_create_tenant_makes_owner_membership(client, db_session, user_a_id):
+    token = make_token(user_a_id)
+    resp = await client.post(
+        "/api/v1/tenants", json={"name": "Acme"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    tid = resp.json()["id"]
+
+    rows = (await db_session.execute(
+        __import__("sqlalchemy").select(Membership).where(Membership.tenant_id == tid)
+    )).scalars().all()
+    assert len(rows) == 1
+    assert str(rows[0].user_id) == user_a_id
+    assert rows[0].role == "owner"
+
+
+async def test_list_tenants_only_returns_own(client, db_session, user_a_id, user_b_id):
+    await _seed_tenant(db_session, uuid.UUID(user_a_id), "AceCo")
+    await _seed_tenant(db_session, uuid.UUID(user_b_id), "BeeCo")
+
+    token = make_token(user_a_id)
+    resp = await client.get(
+        "/api/v1/tenants", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert resp.status_code == 200
+    names = {t["name"] for t in resp.json()}
+    assert names == {"AceCo"}
+
+
+async def test_add_member_with_known_email(client, db_session, user_a_id, monkeypatch):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+    new_id = uuid.uuid4()
+
+    async def fake_lookup(email):
+        return new_id
+
+    monkeypatch.setattr(supabase_client, "lookup_user_id_by_email", fake_lookup)
+
+    token = make_token(user_a_id)
+    resp = await client.post(
+        f"/api/v1/tenants/{tenant.id}/members",
+        json={"email": "new@x.com"},
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 201
+
+    rows = (await db_session.execute(
+        __import__("sqlalchemy").select(Membership).where(
+            Membership.tenant_id == tenant.id
+        )
+    )).scalars().all()
+    assert {str(r.user_id) for r in rows} == {user_a_id, str(new_id)}
+
+
+async def test_add_member_unknown_email_is_404(client, db_session, user_a_id, monkeypatch):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+
+    async def fake_lookup(email):
+        return None
+
+    monkeypatch.setattr(supabase_client, "lookup_user_id_by_email", fake_lookup)
+
+    token = make_token(user_a_id)
+    resp = await client.post(
+        f"/api/v1/tenants/{tenant.id}/members",
+        json={"email": "ghost@x.com"},
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 404
+
+
+async def test_non_member_cannot_list_members(client, db_session, user_a_id, user_b_id):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+    token = make_token(user_b_id)
+    resp = await client.get(
+        f"/api/v1/tenants/{tenant.id}/members",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 403
