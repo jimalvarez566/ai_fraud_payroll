@@ -3,7 +3,7 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import receipts, tenants
+from app.api.v1 import auth_routes, receipts, tenants
 from app.config import settings
 
 logging.basicConfig(
@@ -27,6 +27,7 @@ app.add_middleware(
 
 app.include_router(receipts.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
+app.include_router(auth_routes.router, prefix="/api/v1")
 
 
 @app.get("/health")
