@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,11 +105,15 @@ async def remove_member(
     db: AsyncSession = Depends(get_db),
 ) -> None:
     await _require_membership(tenant_id, context)
+    try:
+        parsed_user_id = UUID(user_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Membership not found")
     row = (
         await db.execute(
             select(Membership).where(
                 Membership.tenant_id == tenant_id,
-                Membership.user_id == user_id,
+                Membership.user_id == parsed_user_id,
             )
         )
     ).scalar_one_or_none()

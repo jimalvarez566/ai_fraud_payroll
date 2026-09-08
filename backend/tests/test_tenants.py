@@ -88,6 +88,37 @@ async def test_add_member_unknown_email_is_404(client, db_session, user_a_id, mo
     assert resp.status_code == 404
 
 
+async def test_remove_member_success(client, db_session, user_a_id, monkeypatch):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+    victim = uuid.uuid4()
+    db_session.add(Membership(tenant_id=tenant.id, user_id=victim, role="member"))
+    await db_session.commit()
+
+    token = make_token(user_a_id)
+    resp = await client.request(
+        "DELETE",
+        f"/api/v1/tenants/{tenant.id}/members/{victim}",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 204
+
+    rows = (await db_session.execute(
+        __import__("sqlalchemy").select(Membership).where(Membership.tenant_id == tenant.id)
+    )).scalars().all()
+    assert {str(r.user_id) for r in rows} == {user_a_id}
+
+
+async def test_remove_member_bad_uuid_is_404(client, db_session, user_a_id):
+    tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
+    token = make_token(user_a_id)
+    resp = await client.request(
+        "DELETE",
+        f"/api/v1/tenants/{tenant.id}/members/not-a-uuid",
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
+    )
+    assert resp.status_code == 404
+
+
 async def test_non_member_cannot_list_members(client, db_session, user_a_id, user_b_id):
     tenant = await _seed_tenant(db_session, uuid.UUID(user_a_id))
     token = make_token(user_b_id)
