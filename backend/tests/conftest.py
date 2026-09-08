@@ -6,10 +6,15 @@ os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret")
 os.environ.setdefault("SUPABASE_URL", "https://test.supabase.co")
 os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("SUPABASE_STORAGE_BUCKET", "receipts")
-os.environ.setdefault(
-    "DATABASE_URL",
+_TEST_DB_URL = os.environ.get(
+    "TEST_DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/fraud_detection_test",
 )
+if "test" not in _TEST_DB_URL.rsplit("/", 1)[-1]:
+    raise RuntimeError(
+        f"Refusing to run tests: database name in {_TEST_DB_URL!r} does not contain 'test'"
+    )
+os.environ["DATABASE_URL"] = _TEST_DB_URL
 
 import pytest
 import pytest_asyncio
