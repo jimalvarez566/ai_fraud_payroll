@@ -78,9 +78,17 @@
 - [ ] Custom ML model training on company data
 - [ ] Notion/Linear export integration
 
+## Next (Phase 2 hardening of multi-tenancy)
+- [ ] Add Row-Level Security policies on tenant tables (defense-in-depth)
+- [ ] Enforce roles (admin vs member) on tenant + policy_rule endpoints
+- [ ] Invitation tokens + emails for users without a Supabase account yet
+- [ ] Serve receipt images to the frontend via short-lived signed URLs
+- [ ] Handle GoTrue admin-list pagination in lookup_user_id_by_email
+
 ## Done ✅
 - [x] Created PROJECT.md
 - [x] Created IMPLEMENTATION.md
 - [x] Created TODO.md
 - [x] Defined database schema
 - [x] Chose tech stack
+- [x] Supabase-backed multi-tenant auth foundation (tenants, memberships, JWT verification, Storage)
