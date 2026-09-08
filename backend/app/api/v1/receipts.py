@@ -71,7 +71,13 @@ async def upload_receipt(
     try:
         await db.flush()
     except Exception:
-        await supabase_client.delete_object(object_path)
+        try:
+            await supabase_client.delete_object(object_path)
+        except Exception:  # noqa: BLE001 — cleanup is best-effort
+            logger.warning(
+                "Failed to delete orphaned storage object %s after DB error",
+                object_path,
+            )
         raise
     await db.refresh(receipt, attribute_names=["fraud_flags"])
 
