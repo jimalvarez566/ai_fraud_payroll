@@ -16,13 +16,14 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from jose import jwt
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 from app.database import Base, get_db
 import app.models  # noqa: F401  — ensure all models are registered on Base.metadata
 from app.main import app
 
-test_engine = create_async_engine(settings.DATABASE_URL, echo=False)
+test_engine = create_async_engine(settings.DATABASE_URL, echo=False, poolclass=NullPool)
 TestSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
 
 
