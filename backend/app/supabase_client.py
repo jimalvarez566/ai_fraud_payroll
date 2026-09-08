@@ -47,13 +47,10 @@ async def lookup_user_id_by_email(email: str) -> UUID | None:
     else:
         users = body.get("users", [])
 
-    wanted = email.strip().lower()
     for user in users:
-        user_email = user.get("email")
-        if user_email is None or user_email.strip().lower() == wanted:
-            user_id = user.get("id")
-            if user_id:
-                return UUID(str(user_id))
+        got = user.get("email")
+        if isinstance(got, str) and got.strip().lower() == email.strip().lower():
+            return UUID(user["id"])
     return None
 
 

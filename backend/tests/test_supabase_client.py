@@ -14,7 +14,7 @@ def mock_transport(monkeypatch):
             if "known@x.com" in str(request.url):
                 return httpx.Response(
                     200,
-                    json={"users": [{"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}]},
+                    json={"users": [{"id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "email": "known@x.com"}]},
                 )
             return httpx.Response(200, json={"users": []})
         if request.method in ("PUT", "POST") and "/storage/v1/object/" in request.url.path:
