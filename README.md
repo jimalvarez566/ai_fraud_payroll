@@ -130,8 +130,8 @@ cp .env.example .env
 # 4. Run migrations
 alembic upgrade head
 
-# 5. (optional) Seed default policy rules for an existing business
-# (optional) backfill default policy rules for a business created before auto-seeding:
+# 5. Businesses created via POST /api/v1/tenants are auto-seeded with the 6
+#    default policy rules. Only backfill an older business manually:
 # python seed_policies.py --tenant-id <id>
 
 # 6. Start server
