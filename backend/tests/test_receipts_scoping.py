@@ -101,3 +101,46 @@ async def test_upload_without_tenant_header_is_400(client, db_session, user_a_id
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 400
+
+
+from app.models.fraud_flag import FraudFlag
+
+_SHARED_HASH = "a" * 16
+
+
+async def test_review_original_receipt_id_is_tenant_scoped(client, db_session, user_a_id, user_b_id):
+    ace = await _seed(db_session, uuid.UUID(user_a_id), "AceCo")
+    bee = await _seed(db_session, uuid.UUID(user_b_id), "BeeCo")
+
+    # Tenant A already has a receipt with the shared image hash.
+    a_receipt = Receipt(
+        image_path="a/x.png", tenant_id=ace.id,
+        submitted_by_user_id=uuid.UUID(user_a_id),
+        status="analyzed", image_hash=_SHARED_HASH,
+    )
+    db_session.add(a_receipt)
+    await db_session.flush()
+
+    # Tenant B's receipt: same hash, already analyzed, carries a duplicate flag.
+    b_receipt = Receipt(
+        image_path="b/x.png", tenant_id=bee.id,
+        submitted_by_user_id=uuid.UUID(user_b_id),
+        status="flagged", image_hash=_SHARED_HASH,
+    )
+    db_session.add(b_receipt)
+    await db_session.flush()
+    db_session.add(FraudFlag(
+        receipt_id=b_receipt.id, flag_type="duplicate", severity="high",
+        description="dup", details={}, confidence_score=100,
+    ))
+    await db_session.commit()
+
+    token = make_token(user_b_id)
+    resp = await client.request(
+        "PATCH",
+        f"/api/v1/receipts/{b_receipt.id}/review",
+        json={"decision": "approved"},
+        headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(bee.id)},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["original_receipt_id"] is None  # A's receipt must be invisible
