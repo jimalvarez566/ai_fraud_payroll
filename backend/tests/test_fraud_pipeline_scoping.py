@@ -8,6 +8,7 @@ from app.models import Membership, Tenant
 from app.models.employee import Employee
 from app.models.policy_rule import PolicyRule
 from app.models.receipt import Receipt
+from app.services.duplicate_detector import detect_duplicates
 from app.services.policy_validator import validate_receipt
 
 
@@ -81,3 +82,27 @@ async def test_short_window_duplicate_does_not_cross_tenants(db_session):
     )
     flags_b = await validate_receipt(r_b, db_session)
     assert flags_b == []  # the match is in another tenant
+
+
+_HASH = "f" * 16  # a valid 64-bit hex pHash string
+
+
+async def test_duplicate_detection_does_not_cross_tenants(db_session):
+    a = await _tenant(db_session, "A")
+    b = await _tenant(db_session, "B")
+    await _receipt(db_session, a.id, image_hash=_HASH)
+    r_b = await _receipt(db_session, b.id, image_hash=_HASH)
+
+    flags = await detect_duplicates(r_b, db_session)
+    assert flags == []  # A's identical image must be invisible to B
+
+
+async def test_duplicate_detection_matches_within_same_tenant(db_session):
+    b = await _tenant(db_session, "B")
+    first = await _receipt(db_session, b.id, image_hash=_HASH)
+    r_b = await _receipt(db_session, b.id, image_hash=_HASH)
+
+    flags = await detect_duplicates(r_b, db_session)
+    assert len(flags) == 1
+    assert flags[0].flag_type == "duplicate"
+    assert flags[0].details["duplicate_receipt_id"] == first.id
