@@ -146,3 +146,24 @@ async def test_non_member_cannot_list_members(client, db_session, user_a_id, use
         headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": str(tenant.id)},
     )
     assert resp.status_code == 403
+
+
+from app.models.policy_rule import PolicyRule
+from app.services.policy_defaults import DEFAULT_RULES
+
+
+async def test_create_tenant_seeds_default_policies(client, db_session, user_a_id):
+    token = make_token(user_a_id)
+    resp = await client.post(
+        "/api/v1/tenants", json={"name": "Acme"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resp.status_code == 201
+    tid = resp.json()["id"]
+
+    rows = (await db_session.execute(
+        __import__("sqlalchemy").select(PolicyRule).where(PolicyRule.tenant_id == tid)
+    )).scalars().all()
+    assert len(rows) == len(DEFAULT_RULES)
+    assert all(r.tenant_id == tid for r in rows)
+    assert all(r.is_active is True for r in rows)

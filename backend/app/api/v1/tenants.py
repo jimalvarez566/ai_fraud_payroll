@@ -14,6 +14,7 @@ from app.schemas.tenant import (
     TenantCreate,
     TenantResponse,
 )
+from app.services.policy_defaults import build_default_rules
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
@@ -28,6 +29,7 @@ async def create_tenant(
     db.add(tenant)
     await db.flush()
     db.add(Membership(tenant_id=tenant.id, user_id=user.user_id, role="owner"))
+    db.add_all(build_default_rules(tenant.id))
     await db.flush()
     return tenant
 
