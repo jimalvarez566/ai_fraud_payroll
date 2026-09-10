@@ -84,6 +84,32 @@ async def test_short_window_duplicate_does_not_cross_tenants(db_session):
     assert flags_b == []  # the match is in another tenant
 
 
+async def test_short_window_duplicate_matches_within_same_tenant(db_session):
+    b = await _tenant(db_session, "B")
+    db_session.add(PolicyRule(
+        tenant_id=b.id, rule_name="swd", rule_type="short_window_duplicate",
+        severity="high", parameters={"window_hours": 48, "amount_tolerance_pct": 10},
+        is_active=True,
+    ))
+    emp = Employee(tenant_id=b.id, name="E", email="e@b.com")
+    db_session.add(emp)
+    await db_session.flush()
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    older = await _receipt(
+        db_session, b.id, employee_id=emp.id, merchant="Cafe Nero",
+        amount=Decimal("20.00"), created_at=now,
+    )
+    newer = await _receipt(
+        db_session, b.id, employee_id=emp.id, merchant="Cafe Nero Downtown",
+        amount=Decimal("20.50"), created_at=now,
+    )
+    flags = await validate_receipt(newer, db_session)
+    assert len(flags) == 1
+    assert flags[0].flag_type == "policy_violation"
+    assert flags[0].details["matching_receipt_id"] == older.id
+
+
 _HASH = "f" * 16  # a valid 64-bit hex pHash string
 
 
