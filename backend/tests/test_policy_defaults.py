@@ -24,3 +24,11 @@ def test_build_default_rules_returns_fresh_objects_each_call():
     a = build_default_rules(1)
     b = build_default_rules(1)
     assert a[0] is not b[0]
+
+
+def test_build_default_rules_deep_copies_parameters():
+    rules = build_default_rules(1)
+    by_name = {r.rule_name: r for r in rules}
+    for d in DEFAULT_RULES:
+        assert by_name[d["rule_name"]].parameters == d["parameters"]
+        assert by_name[d["rule_name"]].parameters is not d["parameters"]

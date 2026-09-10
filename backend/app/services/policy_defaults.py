@@ -3,6 +3,8 @@
 Single source of truth for both the tenants API (auto-seed on business
 creation) and seed_policies.py (backfill for pre-existing businesses).
 """
+import copy
+
 from app.models.policy_rule import PolicyRule
 
 DEFAULT_RULES: list[dict] = [
@@ -76,7 +78,7 @@ def build_default_rules(tenant_id: int) -> list[PolicyRule]:
             rule_name=d["rule_name"],
             rule_type=d["rule_type"],
             severity=d["severity"],
-            parameters=d["parameters"],
+            parameters=copy.deepcopy(d["parameters"]),
             is_active=True,
         )
         for d in DEFAULT_RULES
