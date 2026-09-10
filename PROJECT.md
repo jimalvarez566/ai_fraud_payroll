@@ -38,20 +38,25 @@ An intelligent fraud detection system that analyzes employee expense reports usi
 ## Core Features
 
 ### Phase 1 (Spring 2026 - MVP)
-1. **Receipt Processing**
+1. **Receipt Processing** ✅
    - File upload (PNG, JPG, PDF)
-   - OCR text extraction (Tesseract primary, Gemini Vision fallback)
-   - Structured data parsing (merchant, amount, date, items)
+   - OCR text extraction via Tesseract with image preprocessing pipeline
+   - Structured data parsing (merchant, amount, date, items) with footer zone cutoff
+   - OCR and pHash computed in parallel via `asyncio.gather`
 
-2. **Fraud Detection**
-   - Duplicate detection using perceptual hashing
-   - Policy validation (configurable rules)
-   - Basic risk scoring (0-100 scale)
+2. **Fraud Detection** ✅
+   - Duplicate detection via perceptual hashing (pHash, Hamming distance ≤ 10)
+   - Policy validation — 5 configurable rule types (amount_limit, future_date, vendor_category, round_number, short_window_duplicate)
+   - Risk scoring 0–100 with diminishing returns for multiple flags
+   - Pipeline orchestrator (`fraud_detection_pipeline.py`) used by upload + analyze endpoints
+   - Review endpoint with `original_receipt_id` context for duplicate chains
+   - 53 unit tests, all passing
 
-3. **Simple UI**
-   - Upload form
-   - Results display with fraud flags
-   - Basic fraud explanations
+3. **Simple UI** ✅
+   - Upload page — drag-and-drop, loading state, redirect on success
+   - Receipts list — paginated table with status filter
+   - Receipt detail — fraud score, OCR fields, fraud flags, approve/reject/re-analyze
+   - Dashboard — volume and risk breakdown summary cards
 
 ### Phase 2 (Fall 2026 - Production)
 1. **Advanced Detection**

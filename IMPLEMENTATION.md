@@ -17,53 +17,56 @@ Receipt Upload → OCR Extraction → Fraud Detection Pipeline → Risk Scoring 
 ```
 backend/
 ├── app/
-│   ├── main.py                 # FastAPI app initialization
-│   ├── config.py              # Configuration and environment variables
-│   ├── database.py            # Database connection and session management
+│   ├── main.py                 # FastAPI app, CORS, router registration
+│   ├── config.py              # Pydantic settings from .env
+│   ├── database.py            # Async SQLAlchemy engine, session, Base
 │   │
-│   ├── models/                # SQLAlchemy models
-│   │   ├── receipt.py
-│   │   ├── fraud_flag.py
-│   │   └── employee.py
+│   ├── models/                # SQLAlchemy ORM models (built ✅)
+│   │   ├── receipt.py         # Receipt with OCR fields, fraud score, status
+│   │   ├── fraud_flag.py      # Individual fraud signals per receipt
+│   │   ├── employee.py        # Employee spending history
+│   │   └── policy_rule.py     # Configurable fraud rules
 │   │
-│   ├── schemas/               # Pydantic schemas for request/response
-│   │   ├── receipt.py
-│   │   ├── fraud.py
-│   │   └── analytics.py
+│   ├── schemas/               # Pydantic request/response schemas (built ✅)
+│   │   ├── receipt.py         # ReceiptResponse, ReceiptListResponse
+│   │   └── fraud.py           # FraudFlagResponse
 │   │
 │   ├── api/                   # API routes
 │   │   ├── v1/
-│   │   │   ├── receipts.py   # Receipt CRUD
-│   │   │   ├── analyze.py    # Fraud analysis endpoint
-│   │   │   └── analytics.py  # Analytics dashboard (Phase 2)
-│   │   └── deps.py           # Dependency injection
+│   │   │   └── receipts.py   # Upload, get by ID, list (built ✅)
+│   │   └── deps.py           # DB session dependency
 │   │
 │   ├── services/              # Business logic
-│   │   ├── ocr_service.py            # Tesseract + Gemini Vision
-│   │   ├── duplicate_detector.py    # Perceptual hashing
-│   │   ├── policy_validator.py      # Rule-based checks
+│   │   ├── ocr.py            # Tesseract OCR pipeline (built ✅)
+│   │   ├── duplicate_detector.py    # Perceptual hashing (planned)
+│   │   ├── policy_validator.py      # Rule-based checks (planned)
 │   │   ├── anomaly_detector.py      # Isolation Forest (Phase 2)
 │   │   ├── ai_analyzer.py           # Claude/Gemini API calls (Phase 2)
-│   │   └── fraud_scorer.py          # Combine signals into risk score
+│   │   └── fraud_scorer.py          # Combine signals into risk score (planned)
 │   │
-│   ├── repositories/          # Data access layer
-│   │   ├── receipt_repo.py
-│   │   └── fraud_flag_repo.py
-│   │
-│   └── utils/                 # Utilities
-│       ├── image_processing.py
-│       ├── text_parsing.py
-│       └── cache.py
+│   └── repositories/          # Data access layer (planned)
+│       ├── receipt_repo.py
+│       └── fraud_flag_repo.py
 │
-├── tests/
-│   ├── test_api/
-│   ├── test_services/
-│   └── test_models/
-│
+├── tests/                     # (planned)
 ├── requirements.txt
-├── .env.example
-└── alembic/                   # Database migrations
+├── .env / .env.example
+└── alembic/                   # Migrations (initial schema applied ✅)
 ```
+### Frontend Architecture
+See `FRONTEND.md` for full frontend implementation details, design decisions, and page specs.
+
+Frontend stack: React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, React Router.
+Connects to backend via `VITE_API_URL` environment variable.
+
+Directory structure:
+frontend/
+├── src/
+│   ├── pages/         # Dashboard, ReceiptsList, ReceiptDetail, Upload
+│   ├── components/    # Shared UI components
+│   └── main.tsx
+├── .env
+└── vite.config.ts
 
 ## Database Schema
 
@@ -270,23 +273,50 @@ Each detector implements this interface:
 - `AnomalyDetector` (Phase 2): Uses Isolation Forest
 - `AIAnalyzer` (Phase 2): Calls Claude/Gemini APIs
 
-## AI Integration Strategy
+## OCR Service Design (`app/services/ocr.py`)
 
-### OCR Service (Tesseract + Gemini)
-```python
-# services/ocr_service.py
+### Preprocessing Pipeline
+Every image is preprocessed before any Tesseract call to improve recognition accuracy on phone-captured receipts:
+1. **Grayscale** — removes irrelevant colour channels
+2. **Upscale** — minimum 1000px width; Tesseract accuracy degrades below ~200 DPI
+3. **Autocontrast** — stretches the histogram so faint ink becomes darker
+4. **Sharpen (2×)** — compensates for camera blur
+5. **Binarize** — pure black/white at threshold 128; eliminates grey gradients
 
-class OCRService:
-    async def extract_text(self, image_path: str) -> OCRResult:
-        # Try Tesseract first (free, fast)
-        tesseract_result = self._tesseract_extract(image_path)
-        
-        if tesseract_result.confidence > 70:
-            return tesseract_result
-        
-        # Fallback to Gemini Vision (better accuracy, costs API call)
-        return await self._gemini_extract(image_path)
+### Merchant Name Detection
+Uses `image_to_data` (Tesseract's structured output) rather than raw text:
+- **Pass 1**: reads level-4 (line) bounding box heights — these span the full line, giving reliable font-size comparisons
+- **Pass 2**: collects level-5 (word) tokens for candidate lines using Tesseract's `(block_num, par_num, line_num)` key — avoids per-letter height inconsistencies that broke earlier approaches
+- **Boilerplate filter**: strips URLs, "thank you", payment keywords, and long numeric sequences before ranking
+- **Zone filter**: ignores anything below 60% of the image height (footer territory)
+- **Token cleanup**: removes pure-symbol tokens and 1–2 char lowercase fragments from the winning line
+
+### Field Extraction (from raw text)
+| Field | Strategy |
+|---|---|
+| `merchant` | Font-size detection (above) |
+| `transaction_date` | Regex covering MM/DD/YYYY, YYYY-MM-DD, month-name formats |
+| `transaction_time` | Regex for HH:MM with optional seconds and AM/PM |
+| `amount` | Keyword-anchored search (`total`, `amount due`); falls back to largest dollar figure |
+| `items` | Line-by-line regex; **stops at first footer keyword** (subtotal/tax/total) to exclude payment and card lines; handles trailing taxability indicators (X, N) |
+
+### Confidence Score
+Simple 0–100 score: 25 points per successfully extracted field (merchant, date, total, at least one item).
+
+### Stored Output
+The `items` JSONB column stores:
+```json
+{
+  "line_items": [{"description": "BOYS CREW", "amount": 9.48}],
+  "transaction_time": "22:36:22",
+  "raw_text": "..."
+}
 ```
+
+## AI Integration Strategy (Phase 2)
+
+### OCR Fallback (Gemini Vision)
+If Tesseract confidence < 70, fall back to Gemini Vision for extraction. This keeps costs near zero for clear receipts while recovering accuracy on damaged or handwritten ones.
 
 ### Claude API Usage (Phase 2)
 

@@ -4,20 +4,29 @@ import uuid
 import pytest
 
 from app import supabase_client
+from app.api.v1 import receipts as receipts_module
 from app.models import Membership, Receipt, Tenant
+from app.services.ocr import OCRResult
 from tests.conftest import make_token
 
 
 @pytest.fixture(autouse=True)
-def _mock_storage(monkeypatch):
+def _mock_upload_deps(monkeypatch):
+    """Stub out Storage + OCR + hashing + the fraud pipeline for upload tests."""
     async def _upload(path, data, content_type):
         return None
 
     async def _delete(path):
         return None
 
+    async def _pipeline(receipt, db):
+        return None
+
     monkeypatch.setattr(supabase_client, "upload_object", _upload)
     monkeypatch.setattr(supabase_client, "delete_object", _delete)
+    monkeypatch.setattr(receipts_module, "extract_receipt_data", lambda path: OCRResult())
+    monkeypatch.setattr(receipts_module, "compute_image_hash", lambda path: "0" * 16)
+    monkeypatch.setattr(receipts_module, "run_fraud_pipeline", _pipeline)
 
 
 async def _seed(db_session, owner_id, name):
