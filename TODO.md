@@ -137,3 +137,5 @@
 - [x] Tenants + members API; `GET /api/v1/auth/me`
 - [x] Receipts endpoints scoped by tenant; images stored in Supabase Storage
 - [x] All `/api/v1/receipts/*` endpoints (upload, analyze, explain, review, get, list) require JWT + `X-Tenant-ID`
+- [x] Fraud pipeline scoped by tenant (policy rules, pHash + short-window duplicate scans, review duplicate-chain)
+- [x] Default policy rules auto-seeded on business creation; `seed_policies.py --tenant-id` for backfill

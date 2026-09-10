@@ -40,7 +40,9 @@ Preprocessing: grayscale → upscale (min 1000px) → autocontrast → sharpen �
 **Policy Validator** (`app/services/policy_validator.py`)
 - Evaluates all active `policy_rules` from the database
 - Five rule types: `amount_limit`, `future_date`, `vendor_category`, `round_number`, `short_window_duplicate`
-- Seed default rules with `python seed_policies.py`
+- Businesses created via `POST /api/v1/tenants` get the six default policy rules
+  automatically; use `python seed_policies.py --tenant-id <id>` only to backfill a
+  business created before that behavior existed.
 
 **Fraud Scorer** (`app/services/fraud_scorer.py`)
 - Combines all flags into a 0–100 risk score
@@ -128,8 +130,9 @@ cp .env.example .env
 # 4. Run migrations
 alembic upgrade head
 
-# 5. Seed default policy rules
-python seed_policies.py
+# 5. (optional) Seed default policy rules for an existing business
+# (optional) backfill default policy rules for a business created before auto-seeding:
+# python seed_policies.py --tenant-id <id>
 
 # 6. Start server
 uvicorn app.main:app --reload
