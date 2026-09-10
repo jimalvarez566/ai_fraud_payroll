@@ -94,6 +94,7 @@ def make_receipt():
         employee_id=None,
         image_hash=None,
         status="analyzed",
+        tenant_id=1,
     ):
         r = Receipt()
         r.id = id
@@ -104,6 +105,7 @@ def make_receipt():
         r.employee_id = employee_id
         r.image_hash = image_hash
         r.status = status
+        r.tenant_id = tenant_id
         return r
     return _make
 
@@ -111,7 +113,7 @@ def make_receipt():
 @pytest.fixture
 def make_rule():
     """Factory for PolicyRule ORM instances."""
-    def _make(rule_type, parameters, severity="medium", rule_name=None, id=1):
+    def _make(rule_type, parameters, severity="medium", rule_name=None, id=1, tenant_id=1):
         rule = PolicyRule()
         rule.id = id
         rule.rule_name = rule_name or f"Test {rule_type} rule"
@@ -119,6 +121,7 @@ def make_rule():
         rule.parameters = parameters
         rule.severity = severity
         rule.is_active = True
+        rule.tenant_id = tenant_id
         return rule
     return _make
 
