@@ -139,3 +139,5 @@
 - [x] All `/api/v1/receipts/*` endpoints (upload, analyze, explain, review, get, list) require JWT + `X-Tenant-ID`
 - [x] Fraud pipeline scoped by tenant (policy rules, pHash + short-window duplicate scans, review duplicate-chain)
 - [x] Default policy rules auto-seeded on business creation; `seed_policies.py --tenant-id` for backfill
+- [x] Backend verifies both HS256 and ES256 (JWKS) Supabase tokens — real user sessions work end to end
+- [x] Frontend: Supabase signup/login, active-business selection + sidebar switcher, auth headers on all API calls

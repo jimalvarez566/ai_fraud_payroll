@@ -90,6 +90,10 @@ header; `POST` / `GET /api/v1/tenants` require only the JWT.
 - Authentication is handled by Supabase Auth (GoTrue). The frontend logs in
   against Supabase and sends the resulting JWT as `Authorization: Bearer <token>`
   on every request.
+- The backend accepts both HS256 tokens (shared JWT secret) and ES256 tokens
+  (verified against the project's JWKS at `/auth/v1/.well-known/jwks.json`,
+  cached in memory). Supabase projects using asymmetric signing keys work
+  without extra configuration.
 - Data requests also carry `X-Tenant-ID: <id>` to select the active business.
   FastAPI verifies the JWT, checks the caller's membership in that business, and
   scopes every query by that tenant. `POST /api/v1/tenants` and
