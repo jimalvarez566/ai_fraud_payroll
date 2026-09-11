@@ -1,12 +1,13 @@
 import asyncio
 import logging
+import time
 from dataclasses import dataclass
 from uuid import UUID
 
 import httpx
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from jose import JWTError, jwt
+from jose import JOSEError, jwt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,6 +26,11 @@ _ALLOWED_ALGS = {"HS256", "ES256"}
 _jwks_cache: dict[str, dict] = {}
 _jwks_lock = asyncio.Lock()
 
+# Guards against hammering Supabase with a refetch on every request that
+# carries an unknown/bogus `kid` (e.g. a self-signed token from an attacker).
+_JWKS_REFETCH_COOLDOWN_SECONDS = 10.0
+_jwks_last_fetch_attempt: float = 0.0
+
 
 @dataclass
 class CurrentUser:
@@ -36,18 +42,34 @@ def _unauthorized(detail: str = "Invalid or expired token") -> HTTPException:
     return HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=detail)
 
 
+def _filter_signing_keys(keys: list[dict]) -> dict[str, dict]:
+    """Keep only EC signing keys, keyed by kid.
+
+    Supabase JWKS can carry non-EC or non-signing entries (e.g. during key
+    rotation). A non-EC key handed to an ES256 decode raises JWKError rather
+    than JWTError, so such entries must never reach that path.
+    """
+    return {
+        k["kid"]: k
+        for k in keys
+        if k.get("kid") and k.get("kty") == "EC" and k.get("use", "sig") == "sig"
+    }
+
+
 async def _fetch_jwks() -> dict[str, dict]:
-    """Fetch the project's JWKS. Returns {kid: jwk}. Raises on network/parse error."""
+    """Fetch the project's JWKS. Returns {kid: jwk} for EC signing keys only.
+    Raises on network/parse error."""
     url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
     async with httpx.AsyncClient(timeout=5.0) as client:
         resp = await client.get(url)
     resp.raise_for_status()
-    keys = resp.json().get("keys", [])
-    return {k["kid"]: k for k in keys if "kid" in k}
+    return _filter_signing_keys(resp.json().get("keys", []))
 
 
 async def _get_signing_key(kid: str) -> dict:
     """Return the JWK for `kid`, refetching the JWKS once on a cache miss."""
+    global _jwks_last_fetch_attempt
+
     cached = _jwks_cache.get(kid)
     if cached is not None:
         return cached
@@ -55,6 +77,13 @@ async def _get_signing_key(kid: str) -> dict:
         cached = _jwks_cache.get(kid)
         if cached is not None:
             return cached
+        now = time.monotonic()
+        if now - _jwks_last_fetch_attempt < _JWKS_REFETCH_COOLDOWN_SECONDS:
+            # A refetch already happened (or was attempted) recently and this
+            # kid still wasn't found — don't hit Supabase again for every
+            # request carrying an unknown kid.
+            raise _unauthorized()
+        _jwks_last_fetch_attempt = now
         try:
             fresh = await _fetch_jwks()
         except Exception as exc:  # noqa: BLE001 — any fetch/parse failure -> 401
@@ -72,7 +101,7 @@ async def _decode(token: str) -> dict:
     """Verify a Supabase JWT (HS256 with the shared secret, or ES256 via JWKS)."""
     try:
         header = jwt.get_unverified_header(token)
-    except JWTError as exc:
+    except JOSEError as exc:
         raise _unauthorized() from exc
 
     alg = header.get("alg")
@@ -97,7 +126,7 @@ async def _decode(token: str) -> dict:
             algorithms=["ES256"],
             audience="authenticated",
         )
-    except JWTError as exc:
+    except JOSEError as exc:
         raise _unauthorized() from exc
 
 
